@@ -6,12 +6,40 @@ import ItemCard from '../components/ItemCard';
 import BookingCard from '../components/BookingCard';
 import Spinner from '../components/Spinner';
 import EmptyState from '../components/EmptyState';
+import { getBookingTiming } from '../utils/format';
 
 const TABS = [
   { id: 'borrowing', label: 'Borrowing' },
   { id: 'lending', label: 'Requests received' },
   { id: 'listings', label: 'My listings' },
 ];
+
+function getPendingConflictsCount(booking, list) {
+  if (booking.status !== 'pending') return 0;
+  const bItemId = (booking.item?.id || booking.item?._id || booking.item || '').toString();
+  if (!bItemId) return 0;
+  const bId = (booking.id || booking._id || '').toString();
+  const bStart = new Date(booking.startDate).toISOString().slice(0, 10);
+  const bEnd = new Date(booking.endDate).toISOString().slice(0, 10);
+
+  let count = 0;
+  for (const other of list) {
+    const oId = (other.id || other._id || '').toString();
+    if (oId === bId) continue;
+    if (other.status !== 'pending') continue;
+    const oItemId = (other.item?.id || other.item?._id || other.item || '').toString();
+    if (oItemId !== bItemId) continue;
+
+    const oStart = new Date(other.startDate).toISOString().slice(0, 10);
+    const oEnd = new Date(other.endDate).toISOString().slice(0, 10);
+
+    // Overlap: existing.startDate <= new.endDate AND existing.endDate >= new.startDate
+    if (oStart <= bEnd && oEnd >= bStart) {
+      count++;
+    }
+  }
+  return count;
+}
 
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -29,6 +57,11 @@ export default function Dashboard() {
   // Fetch pending requests count for badge
   const pendingRequestsCount = lendingList.filter(
     (b) => b.status === 'pending'
+  ).length;
+
+  // Overdue requests count for badge
+  const overdueRequestsCount = lendingList.filter(
+    (b) => getBookingTiming(b).overdueDays > 0
   ).length;
 
   const fetchTabData = useCallback(async (tab) => {
@@ -108,7 +141,7 @@ export default function Dashboard() {
         completed: 'Item marked as returned (completed)',
       };
       toast.success(successLabels[newStatus] || 'Status updated');
-      fetchTabData(activeTab);
+      fetchTabData('lending');
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to update booking status';
       toast.error(msg);
@@ -178,9 +211,24 @@ export default function Dashboard() {
                 }`}
               >
                 <span>{tab.label}</span>
-                {tab.id === 'lending' && pendingRequestsCount > 0 && (
-                  <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-indigo-600 rounded-full shadow-2xs">
-                    {pendingRequestsCount}
+                {tab.id === 'lending' && (
+                  <span className="flex items-center gap-1.5">
+                    {overdueRequestsCount > 0 && (
+                      <span
+                        title={`${overdueRequestsCount} overdue return${overdueRequestsCount > 1 ? 's' : ''}`}
+                        className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-rose-600 rounded-full shadow-2xs"
+                      >
+                        {overdueRequestsCount}
+                      </span>
+                    )}
+                    {pendingRequestsCount > 0 && (
+                      <span
+                        title={`${pendingRequestsCount} pending request${pendingRequestsCount > 1 ? 's' : ''}`}
+                        className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-indigo-600 rounded-full shadow-2xs"
+                      >
+                        {pendingRequestsCount}
+                      </span>
+                    )}
                   </span>
                 )}
               </button>
@@ -232,6 +280,7 @@ export default function Dashboard() {
                     <BookingCard
                       key={booking.id}
                       booking={booking}
+                      viewerRole="borrower"
                       counterpartLabel="Owner"
                       counterpartName={booking.owner?.name}
                       actions={
@@ -271,56 +320,83 @@ export default function Dashboard() {
                 />
               ) : (
                 <div className="space-y-4">
-                  {lendingList.map((booking) => (
-                    <BookingCard
-                      key={booking.id}
-                      booking={booking}
-                      counterpartLabel="Borrower"
-                      counterpartName={booking.borrower?.name}
-                      counterpartEmail={booking.borrower?.email}
-                      actions={
-                        <>
-                          {booking.status === 'pending' && (
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateBookingStatus(booking.id, 'accepted')}
-                                disabled={actionInProgress === booking.id}
-                                className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
-                              >
-                                {actionInProgress === booking.id ? 'Accepting...' : 'Accept'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateBookingStatus(booking.id, 'rejected')}
-                                disabled={actionInProgress === booking.id}
-                                className="rounded-lg border border-rose-300 bg-white px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors shadow-xs disabled:opacity-50"
-                              >
-                                {actionInProgress === booking.id ? 'Rejecting...' : 'Reject'}
-                              </button>
-                            </div>
-                          )}
+                  {[...lendingList]
+                    .sort((a, b) => {
+                      const aOverdue = getBookingTiming(a).overdueDays > 0;
+                      const bOverdue = getBookingTiming(b).overdueDays > 0;
+                      if (aOverdue && !bOverdue) return -1;
+                      if (!aOverdue && bOverdue) return 1;
+                      return 0;
+                    })
+                    .map((booking) => {
+                      const timing = getBookingTiming(booking);
+                      const conflictsCount = getPendingConflictsCount(booking, lendingList);
+                      const conflictMsg =
+                        conflictsCount > 0
+                          ? `Conflicts with ${conflictsCount} other pending request(s). Accepting this will reject them.`
+                          : null;
 
-                          {booking.status === 'accepted' && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBookingStatus(
-                                  booking.id,
-                                  'completed',
-                                  'Confirm that the item has been returned in good condition?'
-                                )
-                              }
-                              disabled={actionInProgress === booking.id}
-                              className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 transition-colors shadow-xs disabled:opacity-50"
-                            >
-                              {actionInProgress === booking.id ? 'Processing...' : 'Mark returned'}
-                            </button>
-                          )}
-                        </>
-                      }
-                    />
-                  ))}
+                      return (
+                        <BookingCard
+                          key={booking.id}
+                          booking={booking}
+                          viewerRole="owner"
+                          conflictNote={conflictMsg}
+                          counterpartLabel="Borrower"
+                          counterpartName={booking.borrower?.name}
+                          counterpartEmail={booking.borrower?.email}
+                          actions={
+                            <>
+                              {booking.status === 'pending' && (
+                                <div className="flex items-center gap-2">
+                                  {!timing.expired && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateBookingStatus(booking.id, 'accepted', conflictMsg)
+                                      }
+                                      disabled={actionInProgress === booking.id}
+                                      className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition-colors shadow-xs disabled:opacity-50"
+                                    >
+                                      {actionInProgress === booking.id ? 'Accepting...' : 'Accept'}
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateBookingStatus(booking.id, 'rejected')}
+                                    disabled={actionInProgress === booking.id}
+                                    className="rounded-lg border border-rose-300 bg-white px-3.5 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors shadow-xs disabled:opacity-50"
+                                  >
+                                    {actionInProgress === booking.id ? 'Rejecting...' : 'Reject'}
+                                  </button>
+                                </div>
+                              )}
+
+                              {booking.status === 'accepted' && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateBookingStatus(
+                                      booking.id,
+                                      'completed',
+                                      'Confirm that the item has been returned in good condition?'
+                                    )
+                                  }
+                                  disabled={actionInProgress === booking.id}
+                                  className={`rounded-lg transition-all shadow-xs disabled:opacity-50 ${
+                                    timing.overdueDays > 0
+                                      ? 'bg-rose-600 hover:bg-rose-700 px-4 py-2 text-xs font-bold text-white ring-2 ring-rose-400 ring-offset-1'
+                                      : 'bg-indigo-600 hover:bg-indigo-700 px-3.5 py-1.5 text-xs font-medium text-white'
+                                  }`}
+                                >
+                                  {actionInProgress === booking.id ? 'Processing...' : 'Mark returned'}
+                                </button>
+                              )}
+                            </>
+                          }
+                        />
+                      );
+                    })}
                 </div>
               )}
             </div>

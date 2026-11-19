@@ -135,8 +135,26 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
     if (!isOwner) {
       return res.status(403).json({ message: 'Only the item owner can accept or reject bookings' });
     }
-    // On accept: re-run overlap check (exclude this booking's own id)
+    // On accept: re-run checks
     if (newStatus === 'accepted') {
+      const today = todayUTC();
+      // (a) endDate is not before today
+      if (booking.endDate < today) {
+        return res.status(400).json({ message: "This request's dates have already passed" });
+      }
+      // (b) no other accepted booking on the same item is overdue
+      const overdueBooking = await Booking.exists({
+        item: booking.item,
+        status: 'accepted',
+        endDate: { $lt: today },
+        _id: { $ne: booking._id },
+      });
+      if (overdueBooking) {
+        return res.status(409).json({
+          message: 'The previous borrower has not returned this item yet. Mark it as returned first.',
+        });
+      }
+      // (c) existing overlap check (exclude this booking's own id)
       if (await hasAcceptedOverlap(booking.item, booking.startDate, booking.endDate, booking._id)) {
         return res.status(409).json({ message: 'These dates now overlap with another accepted booking' });
       }
@@ -161,6 +179,19 @@ export const updateBookingStatus = asyncHandler(async (req, res) => {
 
   booking.status = newStatus;
   await booking.save();
+
+  if (newStatus === 'accepted') {
+    await Booking.updateMany(
+      {
+        item: booking.item,
+        status: 'pending',
+        _id: { $ne: booking._id },
+        startDate: { $lte: booking.endDate },
+        endDate: { $gte: booking.startDate },
+      },
+      { status: 'rejected' }
+    );
+  }
 
   await booking.populate([
     { path: 'item',     select: 'id title imageUrl pricePerDay' },

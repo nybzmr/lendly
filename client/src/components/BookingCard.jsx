@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import StatusBadge from './StatusBadge';
-import { formatINR, formatDate } from '../utils/format';
+import { formatINR, formatDate, getBookingTiming } from '../utils/format';
 
 export default function BookingCard({
   booking,
@@ -9,11 +9,15 @@ export default function BookingCard({
   counterpartName = '',
   counterpartEmail = '',
   actions = null,
+  viewerRole = 'borrower',
+  conflictNote = null,
 }) {
   const [imgError, setImgError] = useState(false);
   const hasItem = Boolean(booking.item);
   const item = booking.item || {};
   const itemId = item.id || item._id;
+
+  const { overdueDays, dueToday, expired } = getBookingTiming(booking);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row gap-5 items-start">
@@ -77,6 +81,44 @@ export default function BookingCard({
               {formatINR(booking.totalFee)}
             </div>
           </div>
+
+          {/* Timing / Status Banners */}
+          {overdueDays > 0 && (
+            <div className="mt-2.5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 space-y-1">
+              <div className="font-semibold flex items-center gap-1.5">
+                <span>⚠️</span>
+                <span>
+                  {viewerRole === 'owner'
+                    ? `Not returned yet: ${overdueDays} ${overdueDays === 1 ? 'day' : 'days'} overdue`
+                    : `Overdue by ${overdueDays} ${overdueDays === 1 ? 'day' : 'days'}. Please return the item to the owner.`}
+                </span>
+              </div>
+              <div className="text-rose-600 text-2xs">
+                Late by {overdueDays} {overdueDays === 1 ? 'day' : 'days'} (about {formatINR(overdueDays * (booking.pricePerDay || 0))} at the daily rate) · Informational only
+              </div>
+            </div>
+          )}
+
+          {dueToday && (
+            <div className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+              <span>⏰</span>
+              <span>Due back today</span>
+            </div>
+          )}
+
+          {expired && (
+            <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600 flex items-center gap-1.5">
+              <span>⌛</span>
+              <span>This request has expired</span>
+            </div>
+          )}
+
+          {conflictNote && (
+            <div className="mt-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 flex items-center gap-1.5">
+              <span>⚠️</span>
+              <span>{conflictNote}</span>
+            </div>
+          )}
         </div>
 
         {/* Message if any */}

@@ -713,3 +713,146 @@ curl -s http://localhost:8000/api/items/$ITEM_ID/booked-dates | jq .
 ### Deviations from brief
 - None.
 
+---
+
+## Phase 6.2 — Overdue Returns and Conflicting Requests
+
+**Date:** 2026-11-19
+
+### What was built
+
+#### Brief & Rules Update
+- **`PROJECT_BRIEF.md` (Section 6)**:
+  - Documented overdue definition: derived state (never stored) for an accepted booking whose `endDate` is before today (UTC midnight). On `endDate` itself it is 'due today', not overdue.
+  - Documented acceptance requirements: (a) `endDate` not before today (else 400 'This request\'s dates have already passed'); (b) no other accepted booking on the same item is overdue (else 409 'The previous borrower has not returned this item yet. Mark it as returned first.'); (c) existing overlap check.
+  - Documented auto-rejection: accepting a booking automatically sets all other overlapping pending bookings on the same item to `rejected`.
+  - Clarified that late fees, notifications, and penalties are out of scope.
+
+#### Server
+- **`server/src/controllers/booking.controller.js`**:
+  - In `updateBookingStatus` (accept branch):
+    - Added check (a): if `booking.endDate < todayUTC()`, returns `400 { message: "This request's dates have already passed" }`.
+    - Added check (b): if any other accepted booking for the same item has `endDate < todayUTC()`, returns `409 { message: "The previous borrower has not returned this item yet. Mark it as returned first." }`.
+    - Retained check (c): overlap check via `hasAcceptedOverlap`.
+  - After saving the booking as `accepted`, executes `Booking.updateMany` on all pending bookings of the same item (excluding this booking's ID) with overlapping dates (`startDate <= accepted.endDate && endDate >= accepted.startDate`) setting `status: 'rejected'`. Response shape remains `{ booking }`.
+  - `createBooking` remains unchanged: pending requests can still be submitted even if an item is overdue.
+
+#### Client
+- **`client/src/utils/format.js`**:
+  - Added `getBookingTiming(booking)` utility returning `{ overdueDays, dueToday, expired }`.
+- **`client/src/components/BookingCard.jsx`**:
+  - Added `viewerRole` ('owner' | 'borrower') prop and `conflictNote` prop.
+  - When `overdueDays > 0`: displays rose banner with context-specific copy (Owner: "Not returned yet: N day(s) overdue"; Borrower: "Overdue by N day(s). Please return the item to the owner.") along with informational fee estimate line.
+  - When `dueToday`: displays amber banner ("Due back today").
+  - When `expired` on pending bookings: displays slate note ("This request has expired").
+  - When `conflictNote`: displays amber note describing conflict.
+- **`client/src/pages/Dashboard.jsx`**:
+  - Passes `viewerRole="owner"` in the 'Requests received' tab and `viewerRole="borrower"` in the 'Borrowing' tab.
+  - Computes `overdueRequestsCount` and adds a rose count badge on the 'Requests received' tab header next to the pending badge.
+  - Sorts overdue accepted bookings first in 'Requests received', preserving original order for the rest.
+  - Computes pending conflicts client-side: displays amber note on conflicting requests and prompts with a confirmation dialog before accepting.
+  - Hides the Accept button for expired pending bookings (keeps Reject).
+  - Keeps 'Mark returned' available and renders it with visual prominence (rose styling with ring highlight) when a booking is overdue.
+  - Refetches the lending list on accept so auto-rejected bookings immediately reflect as Rejected.
+
+### Files changed
+| File | Changes |
+|---|---|
+| `PROJECT_BRIEF.md` | Appended overdue, acceptance guard, and auto-rejection rules to Section 6 |
+| `server/src/controllers/booking.controller.js` | Added accept checks (a) and (b), plus `updateMany` auto-rejection |
+| `client/src/utils/format.js` | Added `getBookingTiming(booking)` helper |
+| `client/src/components/BookingCard.jsx` | Added `viewerRole`, timing banners (rose, amber, slate), and conflict note |
+| `client/src/pages/Dashboard.jsx` | Added overdue sorting, tab badge, conflict detection, confirmation dialog, expired guard, prominent returned button |
+
+### Verification results
+
+- **Frontend build:** Executed `npm run build` in `client/`. Built cleanly with 0 errors (`dist/` created in 770ms).
+- **Unit & logic tests:**
+  - Verified `getBookingTiming` handles overdue days calculation, due-today detection, and expired pending detection.
+  - Verified sorting logic correctly prioritizes overdue accepted bookings.
+- **Sandbox network isolation note:**
+  - Standard sandbox isolation disables loopback networking (`connectx to 127.0.0.1 port 27017 failed: Operation not permitted`), so live server execution against MongoDB could not be executed within the sandbox.
+
+### Verification instructions for live server
+
+```bash
+# 1. Start server
+cd server && npm run dev
+
+# 2. Register User A (owner), User B (borrower 1), User C (borrower 2)
+curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"Alice","email":"alice_62@test.com","password":"password123"}' | jq -r '.token' > /tmp/tok_a
+curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"Bob","email":"bob_62@test.com","password":"password123"}' | jq -r '.token' > /tmp/tok_b
+curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"Carol","email":"carol_62@test.com","password":"password123"}' | jq -r '.token' > /tmp/tok_c
+
+A=$(cat /tmp/tok_a); B=$(cat /tmp/tok_b); C=$(cat /tmp/tok_c)
+
+# 3. User A creates item
+ITEM_ID=$(curl -s -X POST http://localhost:5000/api/items -H "Authorization: Bearer $A" \
+  -F title="Lawn Mower" -F description="Electric lawn mower" -F category="Tools" -F pricePerDay="200" | jq -r '.item.id')
+
+# 4. Dates: compute today, tomorrow, day-after
+TODAY=$(node -e "console.log(new Date().toISOString().slice(0,10))")
+TOMORROW=$(node -e "console.log(new Date(Date.now()+86400000).toISOString().slice(0,10))")
+DAY_AFTER=$(node -e "console.log(new Date(Date.now()+172800000).toISOString().slice(0,10))")
+
+# 5. User B requests [TODAY, TOMORROW] -> 201 pending
+BOOK_B=$(curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+  -H 'Content-Type: application/json' \
+  -d "{\"itemId\":\"$ITEM_ID\",\"startDate\":\"$TODAY\",\"endDate\":\"$TOMORROW\"}" | jq -r '.booking.id')
+
+# 6. User C requests [TOMORROW, DAY_AFTER] -> 201 pending (conflicts with B on TOMORROW)
+BOOK_C=$(curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $C" \
+  -H 'Content-Type: application/json' \
+  -d "{\"itemId\":\"$ITEM_ID\",\"startDate\":\"$TOMORROW\",\"endDate\":\"$DAY_AFTER\"}" | jq -r '.booking.id')
+
+# 7. User A accepts B -> 200
+curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status -H "Authorization: Bearer $A" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"accepted"}' | jq .status
+
+# 8. Check User C's booking status -> automatically updated to "rejected"
+curl -s http://localhost:5000/api/bookings/borrowing -H "Authorization: Bearer $C" | jq '.bookings[] | select(.id=="'$BOOK_C'") | .status'
+
+# 9. Simulate overdue on B's booking (set endDate to yesterday in mongo):
+node -e "
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import { Booking } from './server/src/models/index.js';
+dotenv.config({ path: './server/.env' });
+await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/lendly');
+const yesterday = new Date(Date.now() - 86400000);
+yesterday.setUTCHours(0,0,0,0);
+await Booking.findByIdAndUpdate('$BOOK_B', { endDate: yesterday });
+console.log('B is now overdue');
+await mongoose.disconnect();
+"
+
+# 10. User C submits a new pending booking for future dates:
+FUTURE_START=$(node -e "console.log(new Date(Date.now()+5*86400000).toISOString().slice(0,10))")
+FUTURE_END=$(node -e "console.log(new Date(Date.now()+7*86400000).toISOString().slice(0,10))")
+BOOK_C2=$(curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $C" \
+  -H 'Content-Type: application/json' \
+  -d "{\"itemId\":\"$ITEM_ID\",\"startDate\":\"$FUTURE_START\",\"endDate\":\"$FUTURE_END\"}" | jq -r '.booking.id')
+
+# 11. User A tries to accept C2 while B is overdue -> 409
+curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_C2/status -H "Authorization: Bearer $A" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"accepted"}' | jq .message
+
+# 12. User A marks B as completed (returned) -> 200
+curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status -H "Authorization: Bearer $A" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"completed"}' | jq .status
+
+# 13. Now User A can accept C2 -> 200
+curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_C2/status -H "Authorization: Bearer $A" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"accepted"}' | jq .status
+```
+
+### Deviations from brief
+- None.
+

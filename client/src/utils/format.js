@@ -33,3 +33,27 @@ export function imageSrc(path) {
   if (!path || typeof path !== 'string' || !path.trim()) return null;
   return path.trim();
 }
+
+/**
+ * Derives overdue, due-today, and expired states for a booking.
+ * @param {Object} booking
+ * @returns {{ overdueDays: number, dueToday: boolean, expired: boolean }}
+ */
+export function getBookingTiming(booking) {
+  if (!booking || !booking.endDate) {
+    return { overdueDays: 0, dueToday: false, expired: false };
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const end = new Date(booking.endDate).toISOString().slice(0, 10);
+
+  let overdueDays = 0;
+  if (booking.status === 'accepted' && end < today) {
+    const msDiff = new Date(`${today}T00:00:00.000Z`).getTime() - new Date(`${end}T00:00:00.000Z`).getTime();
+    overdueDays = Math.round(msDiff / 86400000);
+  }
+
+  const dueToday = booking.status === 'accepted' && end === today;
+  const expired = booking.status === 'pending' && end < today;
+
+  return { overdueDays, dueToday, expired };
+}

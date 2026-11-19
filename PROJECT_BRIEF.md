@@ -84,6 +84,10 @@ Status transitions (only these are allowed):
 - pending or accepted -> cancelled: borrower only.
 - accepted -> completed: item owner only (item was returned).
 - Anything else: 403 for the wrong user, 400 for the wrong current state.
+- Overdue (derived, never stored): a booking with status 'accepted' whose endDate is before today (UTC). On endDate itself it is 'due today', not overdue.
+- Accepting a pending booking additionally requires: (a) its endDate is not before today (else 400 'This request's dates have already passed'); (b) no OTHER accepted booking on the same item is overdue (else 409 'The previous borrower has not returned this item yet. Mark it as returned first.'); (c) the existing overlap check.
+- When a booking is accepted, automatically set every OTHER pending booking on the same item whose dates overlap it (startDate <= accepted.endDate AND endDate >= accepted.startDate) to 'rejected'. The response shape stays { booking }.
+- Late fees, notifications and penalties are out of scope.
 Only the item owner may edit, delete or toggle availability of an item.
 
 ## 7. Backend conventions
