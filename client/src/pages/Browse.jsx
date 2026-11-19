@@ -21,7 +21,7 @@ export default function Browse() {
 
   // Sync search input if URL changes from back/forward navigation
   useEffect(() => {
-    setSearchInput(currentSearch);
+    setSearchInput((prev) => (prev.trim() === currentSearch ? prev : currentSearch));
   }, [currentSearch]);
 
   // Debounced search input handler
@@ -149,7 +149,7 @@ export default function Browse() {
       </section>
 
       {/* Category Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2">
         <button
           onClick={() => handleCategoryClick('All')}
           className={`shrink-0 rounded-full px-4 py-1.5 text-xs md:text-sm font-medium transition-colors ${

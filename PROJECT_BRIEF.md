@@ -10,7 +10,7 @@ Peer-to-peer lending of everyday items. An owner lists a spare item with a per-d
 - DB: MongoDB via Mongoose.
 - Images: multer disk storage in server/uploads, served at /uploads. No Cloudinary.
 - Auth: JWT (7 day expiry) sent as 'Authorization: Bearer <token>', stored in localStorage on the client.
-- Currency: INR, shown with the rupee symbol. Dev ports: server 5000, client 5173. Vite proxies /api and /uploads to http://localhost:5000, so the client uses relative URLs.
+- Currency: INR, shown with the rupee symbol. Dev ports: server 8000, client 5173. Vite proxies /api and /uploads to http://localhost:8000, so the client uses relative URLs.
 
 ## 3. Repo layout
 lendly/
@@ -37,7 +37,7 @@ lendly/
       pages/ Browse, ItemDetail, Login, Register, NewItem, EditItem, Dashboard, NotFound
       utils/format.js, constants.js
 
-server/.env keys: PORT=5000, MONGO_URI, JWT_SECRET, CLIENT_URL=http://localhost:5173
+server/.env keys: PORT=8000, MONGO_URI, JWT_SECRET, CLIENT_URL=http://localhost:5173
 
 ## 4. Data models
 All models: timestamps on, and a toJSON transform that exposes id (string) instead of _id and removes __v.

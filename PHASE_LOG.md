@@ -51,31 +51,31 @@ npm run dev
 Verification (after `npm run dev` in one terminal):
 ```bash
 # Register
-curl -s -X POST http://localhost:5000/api/auth/register \
+curl -s -X POST http://localhost:8000/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"name":"Alice","email":"alice@example.com","password":"secret123"}' | jq .
 
 # Login
-curl -s -X POST http://localhost:5000/api/auth/login \
+curl -s -X POST http://localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","password":"secret123"}' | jq .
 
 # GET /me (replace <token> with the token from login)
-curl -s http://localhost:5000/api/auth/me \
+curl -s http://localhost:8000/api/auth/me \
   -H 'Authorization: Bearer <token>' | jq .
 
 # 409 on duplicate email
-curl -s -X POST http://localhost:5000/api/auth/register \
+curl -s -X POST http://localhost:8000/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"name":"Alice","email":"alice@example.com","password":"secret123"}' | jq .
 
 # 401 on bad password
-curl -s -X POST http://localhost:5000/api/auth/login \
+curl -s -X POST http://localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","password":"wrongpassword"}' | jq .
 
 # 401 on no token
-curl -s http://localhost:5000/api/auth/me | jq .
+curl -s http://localhost:8000/api/auth/me | jq .
 ```
 
 ### Deviations from brief
@@ -113,21 +113,21 @@ curl -s http://localhost:5000/api/auth/me | jq .
 | `src/controllers/item.controller.js` | Full implementation (was stub) |
 | `src/routes/item.routes.js` | Use `uploadSingle('image')` |
 
-### How to verify (run with MongoDB on :27017 and server on :5000)
+### How to verify (run with MongoDB on :27017 and server on :8000)
 ```bash
 # 1. Register two users
-curl -s -X POST http://localhost:5000/api/auth/register \
+curl -s -X POST http://localhost:8000/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"name":"Alice","email":"alice@test.com","password":"secret1"}' | jq -r '.token' > /tmp/tok_alice
 
-curl -s -X POST http://localhost:5000/api/auth/register \
+curl -s -X POST http://localhost:8000/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"name":"Bob","email":"bob@test.com","password":"secret1"}' | jq -r '.token' > /tmp/tok_bob
 
 ALICE=$(cat /tmp/tok_alice); BOB=$(cat /tmp/tok_bob)
 
 # 2. Create item with image (Alice) — use any jpg/png on disk
-curl -s -X POST http://localhost:5000/api/items \
+curl -s -X POST http://localhost:8000/api/items \
   -H "Authorization: Bearer $ALICE" \
   -F title="Power Drill" \
   -F description="A cordless power drill, excellent condition" \
@@ -137,36 +137,36 @@ curl -s -X POST http://localhost:5000/api/items \
 
 # 3. Fetch image from /uploads
 # (use the imageUrl field from the response above)
-curl -I http://localhost:5000/uploads/<filename>
+curl -I http://localhost:8000/uploads/<filename>
 
 # 4. List with search, category, pagination
-curl -s "http://localhost:5000/api/items?search=drill&category=Tools&page=1&limit=12" | jq .
+curl -s "http://localhost:8000/api/items?search=drill&category=Tools&page=1&limit=12" | jq .
 
 # 5. Get one item
-curl -s "http://localhost:5000/api/items/<itemId>" | jq .
+curl -s "http://localhost:8000/api/items/<itemId>" | jq .
 
 # 6. Update as owner (Alice)
-curl -s -X PUT http://localhost:5000/api/items/<itemId> \
+curl -s -X PUT http://localhost:8000/api/items/<itemId> \
   -H "Authorization: Bearer $ALICE" \
   -F pricePerDay=200 | jq .
 
 # 7. Update as other user (Bob) → 403
-curl -s -X PUT http://localhost:5000/api/items/<itemId> \
+curl -s -X PUT http://localhost:8000/api/items/<itemId> \
   -H "Authorization: Bearer $BOB" \
   -F pricePerDay=99 | jq .
 
 # 8. Toggle availability
-curl -s -X PATCH http://localhost:5000/api/items/<itemId>/availability \
+curl -s -X PATCH http://localhost:8000/api/items/<itemId>/availability \
   -H "Authorization: Bearer $ALICE" \
   -H 'Content-Type: application/json' \
   -d '{"isAvailable": false}' | jq .
 
 # 9. Delete (Alice) → 200 { message }
-curl -s -X DELETE http://localhost:5000/api/items/<itemId> \
+curl -s -X DELETE http://localhost:8000/api/items/<itemId> \
   -H "Authorization: Bearer $ALICE" | jq .
 
 # 10. Wrong image type → 400
-curl -s -X POST http://localhost:5000/api/items \
+curl -s -X POST http://localhost:8000/api/items \
   -H "Authorization: Bearer $ALICE" \
   -F title="Bad" -F description="desc" -F category=Tools -F pricePerDay=10 \
   -F image=@/path/to/file.gif | jq .
@@ -209,108 +209,108 @@ Routes (`src/routes/booking.routes.js`) were already correctly wired in Phase 1 
 | `src/controllers/booking.controller.js` | Full implementation (was stub) |
 | `src/controllers/item.controller.js` | `deleteItem` booking guard + `getBookedDates` real query |
 
-### Verification scenario (run with server on :5000, MongoDB on :27017)
+### Verification scenario (run with server on :8000, MongoDB on :27017)
 
 ```bash
 # Setup — register A (owner), B and C (borrowers)
-curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+curl -s -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' \
   -d '{"name":"Alice","email":"a@t.com","password":"pass123"}' | jq -r '.token' > /tmp/tok_a
-curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+curl -s -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' \
   -d '{"name":"Bob","email":"b@t.com","password":"pass123"}' | jq -r '.token' > /tmp/tok_b
-curl -s -X POST http://localhost:5000/api/auth/register -H 'Content-Type: application/json' \
+curl -s -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' \
   -d '{"name":"Carol","email":"c@t.com","password":"pass123"}' | jq -r '.token' > /tmp/tok_c
 A=$(cat /tmp/tok_a); B=$(cat /tmp/tok_b); C=$(cat /tmp/tok_c)
 
 # A creates an item → save ITEM_ID
-curl -s -X POST http://localhost:5000/api/items -H "Authorization: Bearer $A" \
+curl -s -X POST http://localhost:8000/api/items -H "Authorization: Bearer $A" \
   -F title="Power Drill" -F description="Cordless power drill" -F category=Tools -F pricePerDay=100 | jq .
 ITEM=<item_id>
 
 # B books for Dec 10–14 (5 days) → 201, days=5, totalFee=500
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $B" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-10\",\"endDate\":\"2026-12-14\"}" | jq .
 BOOK_B=<booking_b_id>
 
 # A books own item → 403
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $A" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $A" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-20\",\"endDate\":\"2026-12-21\"}" | jq .message
 
 # Past start → 400
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $B" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2024-01-01\",\"endDate\":\"2024-01-05\"}" | jq .message
 
 # End before start → 400
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $B" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-20\",\"endDate\":\"2026-12-10\"}" | jq .message
 
 # Range > 30 days → 400
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $B" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-01\",\"endDate\":\"2027-01-05\"}" | jq .message
 
 # Mark item unavailable → B2 gets 400
-curl -s -X PATCH http://localhost:5000/api/items/$ITEM/availability \
+curl -s -X PATCH http://localhost:8000/api/items/$ITEM/availability \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"isAvailable":false}' | jq .
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $B" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $B" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-20\",\"endDate\":\"2026-12-22\"}" | jq .message
 # Mark back available
-curl -s -X PATCH http://localhost:5000/api/items/$ITEM/availability \
+curl -s -X PATCH http://localhost:8000/api/items/$ITEM/availability \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"isAvailable":true}' | jq .
 
 # C books overlapping dates (pending don't block) → 201
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $C" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $C" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-12\",\"endDate\":\"2026-12-15\"}" | jq .
 BOOK_C=<booking_c_id>
 
 # A accepts B → 200
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_B/status \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"status":"accepted"}' | jq .status
 
 # A tries to accept C → 409 (overlap with B's now-accepted booking)
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_C/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_C/status \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"status":"accepted"}' | jq .message
 
 # New request overlapping B's accepted range → 409
-curl -s -X POST http://localhost:5000/api/bookings -H "Authorization: Bearer $C" \
+curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $C" \
   -H 'Content-Type: application/json' \
   -d "{\"itemId\":\"$ITEM\",\"startDate\":\"2026-12-11\",\"endDate\":\"2026-12-13\"}" | jq .message
 
 # B tries to accept C's booking → 403
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_C/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_C/status \
   -H "Authorization: Bearer $B" -H 'Content-Type: application/json' -d '{"status":"accepted"}' | jq .message
 
 # A tries to cancel B's booking → 403
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_B/status \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"status":"cancelled"}' | jq .message
 
 # Invalid transition: completed → accepted → 400
 # (first complete B's booking, then try accepted)
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_B/status \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"status":"completed"}' | jq .
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_B/status \
   -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"status":"accepted"}' | jq .message
 
 # Note: for delete test, use a fresh booking that is accepted
 # Re-accept C → then GET booked-dates
-curl -s http://localhost:5000/api/items/$ITEM/booked-dates | jq .
+curl -s http://localhost:8000/api/items/$ITEM/booked-dates | jq .
 
 # A tries to delete item with active booking → 409
-curl -s -X DELETE http://localhost:5000/api/items/$ITEM -H "Authorization: Bearer $A" | jq .message
+curl -s -X DELETE http://localhost:8000/api/items/$ITEM -H "Authorization: Bearer $A" | jq .message
 
 # B cancels → then A can delete → 200
-curl -s -X PATCH http://localhost:5000/api/bookings/$BOOK_B/status \
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOK_B/status \
   -H "Authorization: Bearer $B" -H 'Content-Type: application/json' -d '{"status":"cancelled"}' | jq .
-curl -s -X DELETE http://localhost:5000/api/items/$ITEM -H "Authorization: Bearer $A" | jq .message
+curl -s -X DELETE http://localhost:8000/api/items/$ITEM -H "Authorization: Bearer $A" | jq .message
 
 # Lists
-curl -s http://localhost:5000/api/bookings/borrowing -H "Authorization: Bearer $B" | jq .
-curl -s http://localhost:5000/api/bookings/lending  -H "Authorization: Bearer $A" | jq .
+curl -s http://localhost:8000/api/bookings/borrowing -H "Authorization: Bearer $B" | jq .
+curl -s http://localhost:8000/api/bookings/lending  -H "Authorization: Bearer $A" | jq .
 ```
 
 ### Logic unit tests
@@ -330,7 +330,7 @@ curl -s http://localhost:5000/api/bookings/lending  -H "Authorization: Bearer $A
 **Date:** 2026-11-19
 
 ### What was built
-- **Vite + React Setup**: Created `client/` configured with Vite, React 19, `@tailwindcss/vite` plugin, and proxies for `/api` and `/uploads` forwarding to `http://localhost:5000`.
+- **Vite + React Setup**: Created `client/` configured with Vite, React 19, `@tailwindcss/vite` plugin, and proxies for `/api` and `/uploads` forwarding to `http://localhost:8000`.
 - **Tailwind CSS v4 & Styling**: `@import "tailwindcss";` in `src/index.css`, Inter font imported in `index.html` and configured as body font, adhering to the design system (slate-50 background, slate-900 text, indigo-600 primary).
 - **Utilities**:
   - `src/utils/format.js`: `formatINR(n)` (₹ with Indian locale formatting), `formatDate(d)`, `imageSrc(path)`.
@@ -605,3 +605,111 @@ Build finishes with 0 errors.
 
 ### Known issues
 - None.
+
+---
+
+## Phase 6.1 — Audit Fixes
+
+**Date:** 2026-11-19
+
+### What changed per item number
+
+1. **`server/src/controllers/item.controller.js` (`getBookedDates`)**:
+   - Replaced `.select('startDate endDate -_id')` with `.select('startDate endDate')` and mapped results to `{ startDate: b.startDate, endDate: b.endDate }`. This prevents Mongoose's `toJSON` transform from crashing on undefined `ret._id` when returning accepted bookings.
+
+2. **`server/src/models/index.js` (Null-safe `toJSONTransform` & `User` transform)**:
+   - Added `if (ret._id)` check before assigning `ret.id = ret._id.toString()` in both `toJSONTransform` and `userSchema.set('toJSON')`. Guards against missing `_id` fields in projections across all models.
+
+3. **`server/src/app.js` (Undefined `req.body` fallback middleware)**:
+   - Added middleware directly after `express.json()` and `express.urlencoded()` to set `req.body = {}` when `req.body === undefined`. Resolves Express 5 behavior where empty request bodies left `req.body` undefined, causing 500 errors on endpoints that destructure `req.body`.
+
+4. **`server/src/controllers/item.controller.js` (`parseItemFields`)**:
+   - Replaced `parseInt(rawPrice, 10)` with strict `Number(rawPrice)` validation using `!Number.isInteger(price) || price < 1`. Non-integer or alphanumeric values such as `'12.5'` and `'50abc'` are now rejected with 400. Maintained update behavior (only validated if supplied).
+
+5. **`client/src/pages/Browse.jsx` (Search input sync effect)**:
+   - Updated `useEffect` syncing URL query changes to use `setSearchInput((prev) => (prev.trim() === currentSearch ? prev : currentSearch))` to prevent stripping trailing spaces while typing after debounce.
+
+6. **`client/src/components/BookingPanel.jsx` (Auth loading placeholder)**:
+   - Read `loading` from `useAuth()`. Renders a small `Spinner` component while auth session is loading, preventing the "Log in to borrow" card from flashing on page refresh. All React hooks are kept above early return conditions.
+
+7. **`client/src/components/BookingCard.jsx` (Deleted item handling)**:
+   - Added check for deleted items (`booking.item` is null). Displays `'Item removed'` as plain text instead of a link to `/items/undefined`, and renders the fallback package emoji thumbnail.
+
+8. **`client/index.html` (Favicon link)**:
+   - Replaced the missing `/vite.svg` icon link with an inline emoji SVG data URI favicon (`📦`).
+
+9. **Dead CSS classes removed**:
+   - Removed unused class `'animate-in fade-in duration-300'` from `BookingPanel.jsx`.
+   - Removed unused class `'scrollbar-none'` from category filter container in `Browse.jsx`.
+
+10. **`.gitignore` (Server uploads ignore)**:
+    - Added `server/uploads/*` and `!server/uploads/.gitkeep` to ensure uploaded item photos are not committed to git.
+
+### Files changed
+| File | Changes |
+|---|---|
+| `server/src/controllers/item.controller.js` | Item 1 (`getBookedDates`) and Item 4 (`parseItemFields`) |
+| `server/src/models/index.js` | Item 2 (null-safe `toJSONTransform` and `User` transform) |
+| `server/src/app.js` | Item 3 (`req.body = {}` fallback middleware) |
+| `client/src/pages/Browse.jsx` | Item 5 (search input space fix) and Item 9 (removed `scrollbar-none`) |
+| `client/src/components/BookingPanel.jsx` | Item 6 (auth `loading` spinner) and Item 9 (removed `animate-in...`) |
+| `client/src/components/BookingCard.jsx` | Item 7 (deleted item handling) |
+| `client/index.html` | Item 8 (emoji SVG data URI favicon) |
+| `.gitignore` | Item 10 (ignore `server/uploads/*`) |
+
+### Verification results
+
+- **Frontend build:** Executed `npm run build` in `client/`. Built cleanly with 0 errors (`dist/` created).
+- **Unit & Logic verification (node sandbox tests):**
+  - Verified `toJSONTransform` does not throw when `_id` is excluded (null-safe for Booking and User).
+  - Verified `parseItemFields` price validation rejects `'12.5'`, `'50abc'`, `'0'`, `'-10'`, and accepts valid integers (e.g. `'150'`, `200`).
+  - Verified Express middleware sets `req.body = {}` when `req.body` is undefined, preventing destructuring errors in controller routes.
+- **Live server / database verification in sandbox:**
+  - Standard sandbox isolation disables loopback networking (`connectx to 127.0.0.1 port 27017 failed: Operation not permitted`), so live server execution against a database could not be run directly inside the sandbox environment.
+
+### Verification commands to run locally with live database
+
+Run with MongoDB on `:27017` and server on `:8000`:
+```bash
+# 1. Start server
+cd server && npm run dev
+
+# 2. Test POST /api/auth/register with no body returns 400 (not 500)
+curl -s -X POST http://localhost:8000/api/auth/register | jq .
+
+# 3. Register user 1 (owner) and user 2 (borrower)
+curl -s -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"Owner","email":"owner@test.com","password":"password123"}' | jq -r '.token' > /tmp/tok_owner
+curl -s -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' \
+  -d '{"name":"Borrower","email":"borrower@test.com","password":"password123"}' | jq -r '.token' > /tmp/tok_borrower
+
+OWNER=$(cat /tmp/tok_owner)
+BORROWER=$(cat /tmp/tok_borrower)
+
+# 4. Test price validation rejects decimal and alphanumeric price (returns 400)
+curl -s -X POST http://localhost:8000/api/items -H "Authorization: Bearer $OWNER" \
+  -F title="Test Item" -F description="Test description" -F category="Tools" -F pricePerDay="12.5" | jq .
+curl -s -X POST http://localhost:8000/api/items -H "Authorization: Bearer $OWNER" \
+  -F title="Test Item" -F description="Test description" -F category="Tools" -F pricePerDay="50abc" | jq .
+
+# 5. Create valid item
+ITEM_ID=$(curl -s -X POST http://localhost:8000/api/items -H "Authorization: Bearer $OWNER" \
+  -F title="Valid Drill" -F description="Valid cordless drill" -F category="Tools" -F pricePerDay="150" | jq -r '.item.id')
+
+# 6. Book item as borrower
+BOOKING_ID=$(curl -s -X POST http://localhost:8000/api/bookings -H "Authorization: Bearer $BORROWER" \
+  -H 'Content-Type: application/json' \
+  -d "{\"itemId\":\"$ITEM_ID\",\"startDate\":\"2026-12-01\",\"endDate\":\"2026-12-05\"}" | jq -r '.booking.id')
+
+# 7. Accept booking as owner
+curl -s -X PATCH http://localhost:8000/api/bookings/$BOOKING_ID/status -H "Authorization: Bearer $OWNER" \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"accepted"}' | jq .
+
+# 8. Confirm GET /api/items/<id>/booked-dates returns 200 with one range
+curl -s http://localhost:8000/api/items/$ITEM_ID/booked-dates | jq .
+```
+
+### Deviations from brief
+- None.
+

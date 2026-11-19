@@ -18,6 +18,12 @@ app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use((req, _res, next) => {
+  if (req.body === undefined) {
+    req.body = {};
+  }
+  next();
+});
 
 // ─── Static uploads ──────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));

@@ -11,6 +11,7 @@ export default function BookingCard({
   actions = null,
 }) {
   const [imgError, setImgError] = useState(false);
+  const hasItem = Boolean(booking.item);
   const item = booking.item || {};
   const itemId = item.id || item._id;
 
@@ -18,7 +19,7 @@ export default function BookingCard({
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row gap-5 items-start">
       {/* Thumbnail */}
       <div className="relative w-full md:w-36 h-36 md:h-36 rounded-xl bg-slate-100 overflow-hidden shrink-0">
-        {item.imageUrl && !imgError ? (
+        {hasItem && item.imageUrl && !imgError ? (
           <img
             src={item.imageUrl}
             alt={item.title || 'Item image'}
@@ -37,12 +38,18 @@ export default function BookingCard({
       <div className="flex-1 flex flex-col justify-between w-full space-y-3">
         <div>
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-            <Link
-              to={`/items/${itemId}`}
-              className="text-lg font-bold text-slate-900 hover:text-indigo-600 transition-colors line-clamp-1"
-            >
-              {item.title || 'Untitled Item'}
-            </Link>
+            {hasItem ? (
+              <Link
+                to={`/items/${itemId}`}
+                className="text-lg font-bold text-slate-900 hover:text-indigo-600 transition-colors line-clamp-1"
+              >
+                {item.title || 'Untitled Item'}
+              </Link>
+            ) : (
+              <span className="text-lg font-bold text-slate-900 line-clamp-1">
+                Item removed
+              </span>
+            )}
             <StatusBadge status={booking.status} />
           </div>
 

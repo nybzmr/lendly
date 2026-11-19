@@ -46,3 +46,7 @@ coverage/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Uploads
+server/uploads/*
+!server/uploads/.gitkeep

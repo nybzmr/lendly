@@ -54,8 +54,8 @@ function parseItemFields(body, file, isUpdate = false) {
   }
 
   if (!isUpdate || rawPrice !== undefined) {
-    const price = parseInt(rawPrice, 10);
-    if (isNaN(price) || price < 1) {
+    const price = Number(rawPrice);
+    if (!Number.isInteger(price) || price < 1) {
       errors.push('pricePerDay must be an integer >= 1');
     } else {
       data.pricePerDay = price;
@@ -206,10 +206,7 @@ export const deleteItem = asyncHandler(async (req, res) => {
 // ─── GET /api/items/:id/booked-dates ─────────────────────────────────────────
 export const getBookedDates = asyncHandler(async (req, res) => {
   const today = todayUTC();
-  const ranges = await Booking.find({
-    item:    req.params.id,
-    status:  'accepted',
-    endDate: { $gte: today },
-  }).select('startDate endDate -_id');
+  const bookings = await Booking.find({ item: req.params.id, status: 'accepted', endDate: { $gte: today } }).select('startDate endDate');
+  const ranges = bookings.map((b) => ({ startDate: b.startDate, endDate: b.endDate }));
   res.status(200).json({ ranges });
 });

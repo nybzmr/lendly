@@ -3,8 +3,10 @@ import mongoose from 'mongoose';
 export const CATEGORIES = ['Sports', 'Electronics', 'Tools', 'Books', 'Clothing', 'Kitchen', 'Outdoor', 'Other'];
 
 const toJSONTransform = (doc, ret) => {
-  ret.id = ret._id.toString();
-  delete ret._id;
+  if (ret._id) {
+    ret.id = ret._id.toString();
+    delete ret._id;
+  }
   delete ret.__v;
   return ret;
 };
@@ -37,8 +39,10 @@ const userSchema = new mongoose.Schema(
 
 userSchema.set('toJSON', {
   transform: (doc, ret) => {
-    ret.id = ret._id.toString();
-    delete ret._id;
+    if (ret._id) {
+      ret.id = ret._id.toString();
+      delete ret._id;
+    }
     delete ret.__v;
     delete ret.passwordHash;
     return ret;

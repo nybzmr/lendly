@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import Spinner from './Spinner';
 import { formatINR, formatDate } from '../utils/format';
 
 function getTodayString() {
@@ -23,7 +24,7 @@ function calcDaysInclusive(startStr, endStr) {
 }
 
 export default function BookingPanel({ item }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   const todayStr = useMemo(() => getTodayString(), []);
@@ -89,7 +90,16 @@ export default function BookingPanel({ item }) {
     );
   }
 
-  // 2. If user is logged out
+  // 2. While restoring auth session
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 flex justify-center items-center">
+        <Spinner size="sm" />
+      </div>
+    );
+  }
+
+  // 3. If user is logged out
   if (!user) {
     return (
       <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-6 text-center space-y-4">
@@ -110,10 +120,10 @@ export default function BookingPanel({ item }) {
     );
   }
 
-  // 3. Submitted confirmation state
+  // 4. Submitted confirmation state
   if (submitted) {
     return (
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 text-center space-y-4 animate-in fade-in duration-300">
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-6 text-center space-y-4">
         <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center text-xl font-bold">
           ✓
         </div>
